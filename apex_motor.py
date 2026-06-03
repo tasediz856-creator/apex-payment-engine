@@ -1,53 +1,29 @@
-
-
-import asyncio
-import hmac
-import hashlib
-import time
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 import uvicorn
+import os
+from fastapi import FastAPI, HTTPException
 
-# FastAPI Uygulaması
-app = FastAPI(title="APEX Async Ödeme Motoru API")
-SECRET_KEY = b"apex_super_secret_key_987654321"
+app = FastAPI()
 
-# İnternetten gelecek kart verilerinin kalıbı
-class Odemetalebi(BaseModel):
-    kart_sahibi: str
-    kart_no: str
-    son_kullanma_tarihi: str
-    cvv: str
-    tutar: float
-    siparis_id: str
+# Railway için gerekli port ayarı
+port = int(os.environ.get("PORT", 10000))
 
-# Asenkron Ödeme Çekirdeği
-async def apex_motoru_calistir(talep: Odemetalebi):
-    veri_katmani = f"{talep.kart_no}-{talep.tutar}-{talep.siparis_id}".encode()
-    dijital_imza = hmac.new(SECRET_KEY, veri_katmani, hashlib.sha256).hexdigest()
-    await asyncio.sleep(0.1)  # 100ms banka onay süresi simülasyonu
-    
-    return {
-        "durum": "SUCCESS",
-        "mesaj": "Ödeme başarıyla tahsil edildi.",
-        "islem_id": f"APX-{int(time.time())}-{talep.siparis_id}",
-        "dijital_imza": dijital_imza,
-        "islem_zamani": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-    }
+# --- BURAYA KENDİ MANTIKLARINI EKLEYEBİLİRSİN ---
+# Örneğin veritabanı bağlantıları veya ödeme hesaplama fonksiyonların burada durabilir.
 
-# Dış dünyaya açılan kapı (API Endpoint)
-@app.post("/api/v1/pay")
-async def odeme_noktasi(talep: Odemetalebi):
-    if len(talep.kart_no) < 16 or len(talep.cvv) < 3:
-        raise HTTPException(status_code=400, detail="Geçersiz kart veya CVV bilgisi!")
-    if talep.tutar <= 0:
-        raise HTTPException(status_code=400, detail="Ödeme tutarı 0'dan büyük olmalıdır!")
-    try:
-        sonuc = await apex_motoru_calistir(talep)
-        return sonuc
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Sistemsel Hata: {str(e)}")
+@app.get("/")
+def read_root():
+    return {"status": "Apex Payment Engine aktif", "version": "1.0.0"}
 
-# Render'ın çalıştıracağı port ayarı (10000)
+@app.post("/process-payment")
+def process_payment(amount: float):
+    # Ödeme motorunun çalıştığı yer
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Geçersiz ödeme tutarı")
+    return {"message": f"{amount} TL tutarında ödeme işlendi", "status": "Success"}
+
+# -----------------------------------------------
+
 if __name__ == "__main__":
-    uvicorn.run("apex_motor:app", host="0.0.0.0", port=10000, reload=True)
+    # Railway ve benzeri bulut sistemleri için host 0.0.0.0 olmalıdır
+    uvicorn.run("apex_motor:app", host="0.0.0.0", port=port)
+
